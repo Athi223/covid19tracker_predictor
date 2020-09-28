@@ -2,7 +2,7 @@
 
 ## Dashboard
 
-![Imgur](https://i.imgur.com/arj1PO1.png)
+![Imgur](https://i.imgur.com/tu7uiKN.png)
 
 ## Important
 
