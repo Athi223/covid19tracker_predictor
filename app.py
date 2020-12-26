@@ -3,6 +3,7 @@ from time import mktime
 from datetime import datetime, timedelta
 import requests
 import prediction
+import clustering
 
 data = {
 	'modified': ['', ''],
@@ -15,6 +16,7 @@ data = {
 	'districts': {}
 }
 predict = [ None ]*4
+clusters = {}
 annual_dates = []
 annual_prediction = [ [], [], [], [] ]
 
@@ -35,7 +37,9 @@ def predictor():
 @app.route('/api')
 def get_data():
 	get_api()
-	return jsonify({ 'data': data, 'annual_dates': annual_dates, 'annual_prediction': annual_prediction })
+	response = jsonify({ 'data': data, 'annual_dates': annual_dates, 'annual_prediction': annual_prediction, 'clusters': clusters })
+	response.headers["Access-Control-Allow-Origin"] = "*"
+	return response
 
 def get_api():
 	# API Call
@@ -86,13 +90,17 @@ def get_api():
 		reset(False)
 		response = requests.get('https://api.covid19india.org/v4/data.json')
 		data['modified'][1] = r.headers['Last-Modified']
+		clusters['confirmed'] = clustering.Confirmed({stateid: value['total']['confirmed'] for stateid, value in response.json().items() if stateid != 'TT' }).cluster()
+		clusters['active'] = clustering.Active({stateid: (value['total']['confirmed']-value['total']['deceased']-value['total']['recovered']-(value['total']['other'] if 'other' in value['total'] else 0)) for stateid, value in response.json().items() if stateid != 'TT' }).cluster()
+		clusters['deceased'] = clustering.Deceased({stateid: value['total']['deceased'] for stateid, value in response.json().items() if stateid != 'TT' }).cluster()
+		clusters['recovered'] = clustering.Recovered({stateid: value['total']['recovered'] for stateid, value in response.json().items() if stateid != 'TT' }).cluster()
 		for stateid in response.json():
 			total = response.json()[stateid]['total']
 			types = ('confirmed', 'active', 'deceased', 'recovered', 'tested')
 			current = (
 				total[types[0]] or 0,
-				(total[types[0]] or 0) - (total['deceased'] if 'deceased' in total else 0) - (total[types[3]] or 0) - (total['other'] if 'other' in total else 0),
-				total['deceased'] if 'deceased' in total else 0,
+				(total[types[0]] or 0) - (total['deceased'] or 0) - (total[types[3]] or 0) - (total['other'] if 'other' in total else 0),
+				total[types[2]],
 				total[types[3]] or 0,
 				total[types[4]] or 0
 			)
